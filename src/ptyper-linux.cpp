@@ -5,9 +5,26 @@
 
 namespace PAL::TYPER
 {
-	static inline void SleepMilliseconds( uint16_t milliseconds )
+	static inline void SleepMilliseconds( Delay milliseconds )
 	{
 		std::this_thread::sleep_for( std::chrono::milliseconds( milliseconds ) );
+	}
+
+	template <typename TKey, typename TValue>
+	static inline bool UnorderedMapContainsValue( std::unordered_map<TKey, TValue>& unorderedMap, TValue value )
+	{
+		return unorderedMap.count( value ) == 1;
+	}
+
+	static inline bool IsValidThreadPtrAndJoinable( std::thread* threadPtr )
+	{
+		return threadPtr && threadPtr->joinable();
+	}
+
+	template <typename TPtr>
+	static inline void SafeDelete( TPtr* ptr )
+	{
+		if ( ptr ) delete ptr;
 	}
 
 	static DelayMap* __DefaultDelayMap = new DelayMap
@@ -39,10 +56,14 @@ namespace PAL::TYPER
 
 	void Line::PrintChar( size_t index )
 	{
-		if ( GetText() == nullptr ) return;
+		if ( !GetText() ) return;
 
-		printf( "%c", GetText()[index] );
+		char _currentCharacter = GetText()[index];
+
+		printf( "%c", _currentCharacter );
 		fflush( stdout );
+
+		if ( onCharacterTyped ) onCharacterTyped( index, _currentCharacter, GetDelay( _currentCharacter ) );
 	}
 
 	const size_t Line::GetLength( void ) const
@@ -55,10 +76,10 @@ namespace PAL::TYPER
 		return _text;
 	}
 
-	const uint16_t Line::GetDelay( char c ) const
+	const Delay Line::GetDelay( char c ) const
 	{
 		DelayMap _currentDelayMap = *CurrentDelayMap;
-		bool _hasC = _currentDelayMap.count( c ) == 1;
+		bool _hasC = UnorderedMapContainsValue<char, Delay>( _currentDelayMap, c );
 
 		if ( _hasC ) return _currentDelayMap.at( c );
 		else return _baseDelay;
@@ -68,21 +89,16 @@ namespace PAL::TYPER
 	{
 		for ( size_t i = 0; i < _length; i++ )
 		{
-			uint16_t _currentDelay = GetDelay( GetText()[i] );
+			Delay _currentDelay = GetDelay( GetText()[i] );
 
 			PrintChar( i );
 			SleepMilliseconds( _currentDelay );
 		}
 	}
 
-	Line::Line( void )
-	{
-		_baseDelay = 20;
-		_text = new char[7] { "Sample" };
-		_length = 7;
-	}
+	Line::Line( void ) {}
 
-	Line::Line( uint16_t baseDelay, char* text, size_t size )
+	Line::Line( Delay baseDelay, char* text, size_t size )
 	{
 		_baseDelay = baseDelay;
 		_text = new char[size];
@@ -94,13 +110,11 @@ namespace PAL::TYPER
 		}
 	}
 
-	Line::Line( uint16_t baseDelay, std::string text ) : Line( baseDelay, &text[0], text.size() ) {}
-
-	Line::Line( uint16_t baseDelay, std::stringstream textStream ) : Line( baseDelay, textStream.str() ) {}
+	Line::Line( Delay baseDelay, std::string text ) : Line( baseDelay, &text[0], text.size() ) {}
 
 	Line::~Line()
 	{
-		if ( _text != nullptr ) delete _text;
+		SafeDelete( _text );
 	}
 
 	void ThreadedLine::BeginTimer( void )
@@ -126,10 +140,10 @@ namespace PAL::TYPER
 		if ( !_timerRunning ) return;
 		_timerRunning = false;
 
-		if ( _currentTimerThread->joinable() ) _currentTimerThread->join();
+		if ( IsValidThreadPtrAndJoinable( _currentTimerThread ) ) _currentTimerThread->join();
 
-		delete _currentTime;
-		delete _currentTimerThread;
+		SafeDelete( _currentTime );
+		SafeDelete( _currentTimerThread );
 	}
 
 	void ThreadedLine::BeginTyping( void )
@@ -155,7 +169,7 @@ namespace PAL::TYPER
 				}
 			} );
 
-		if ( onBegin != nullptr ) onBegin();
+		if ( onBegin ) onBegin();
 	}
 
 	void ThreadedLine::EndTyping( void )
@@ -164,11 +178,11 @@ namespace PAL::TYPER
 		_isTyping = false;
 
 		EndTimer();
-		if ( _currentTypingThread->joinable() ) _currentTypingThread->join();
+		if ( IsValidThreadPtrAndJoinable( _currentTypingThread ) ) _currentTypingThread->join();
 
-		delete _currentTypingThread;
+		SafeDelete( _currentTypingThread );
 
-		if ( onEnd != nullptr ) onEnd();
+		if ( onEnd ) onEnd();
 	}
 
 	const uint64_t ThreadedLine::GetCurrentTime( void ) const
@@ -209,30 +223,24 @@ namespace PAL::TYPER
 		if ( !IsTyping() ) return;
 		EndTyping();
 
-		if ( onCancel != nullptr ) onCancel();
+		if ( onCancel ) onCancel();
 	}
 
 	void ThreadedLine::Join( void )
 	{
 		if ( !IsTyping() ) return;
 
-		if ( _currentTypingThread == nullptr ) return;
+		if ( !_currentTypingThread ) return;
 		if ( _currentTypingThread->joinable() ) _currentTypingThread->join();
 
 		EndTyping();
 	}
 
-	ThreadedLine::ThreadedLine( void ) : Line()
-	{
-		_currentTime = 0;
-		_currentTimerThread = nullptr;
-	}
+	ThreadedLine::ThreadedLine( void ) : Line() {}
 
-	ThreadedLine::ThreadedLine( uint16_t baseDelay, char* text, size_t size ) : Line( baseDelay, text, size ) {}
+	ThreadedLine::ThreadedLine( Delay baseDelay, char* text, size_t size ) : Line( baseDelay, text, size ) {}
 
-	ThreadedLine::ThreadedLine( uint16_t baseDelay, std::string text ) : Line( baseDelay, text ) {}
-
-	ThreadedLine::ThreadedLine( uint16_t baseDelay, std::stringstream textStream ) : Line( baseDelay, textStream.str() ) {}
+	ThreadedLine::ThreadedLine( Delay baseDelay, std::string text ) : Line( baseDelay, text ) {}
 
 	ThreadedLine::~ThreadedLine()
 	{

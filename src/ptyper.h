@@ -4,28 +4,32 @@
 #include <cstdlib>
 #include <cstdint>
 #include <string>
-#include <sstream>
 #include <thread>
 #include <unordered_map>
 #include <initializer_list>
 
 namespace PAL::TYPER
 {
-	typedef std::unordered_map<char, uint16_t> DelayMap;
+	#define TEXT_BASE_DELAY 20
+	#define TEXT_DEFAULT_VALUE "Sample"
+	#define TEXT_DEFAULT_LENGTH 7
+
+	typedef uint16_t Delay;
+	typedef std::unordered_map<char, Delay> DelayMap;
 
 	const DelayMap GetDelayMap( void );
 
 	// Parameters:
-	// 1 (std::unordered_map<char, uint16_t> || DelayMap) Delay unordered_map to set CurrentDelayMap to
+	// 1 (std::unordered_map<char, Delay> || DelayMap) Delay unordered_map to set CurrentDelayMap to
 	void SetDelayMap( DelayMap );
 	void ResetDelayMap( void );
 
-	struct Line
+	class Line
 	{
 	protected:
-		uint16_t _baseDelay;
-		char* _text;
-		size_t _length;
+		Delay _baseDelay = TEXT_BASE_DELAY;
+		char* _text = new char[] { TEXT_DEFAULT_VALUE };
+		size_t _length = TEXT_DEFAULT_LENGTH;
 
 		// Parameters:
 		// 1 ( size_t ): Index of character to print out
@@ -34,46 +38,41 @@ namespace PAL::TYPER
 		// Parameters:
 		// 1 (size_t): Current Index
 		// 2 (char): Current Character
-		// 3 (uint16_t): Current Delay
-		void ( *typingAction )( size_t, char, uint16_t );
+		// 3 (Delay): Current Delay
+		void ( *onCharacterTyped )( size_t, char, Delay ) = nullptr;
 
 		const size_t GetLength( void ) const;
 		const char* GetText( void ) const;
-		const uint16_t GetDelay( char ) const;
+		const Delay GetDelay( char ) const;
 
 		void TypeLine( void );
 
 		Line( void );
 
 		// Parameters:
-		// 1 (uint16_t): Delay
+		// 1 (Delay): Delay
 		// 2 (char*): Text
 		// 3 (size_t): Length/Size of Text
-		Line( uint16_t, char*, size_t );
+		Line( Delay, char*, size_t );
 
 		// Parameters:
-		// 1 (uint16_t): Delay
+		// 1 (Delay): Delay
 		// 2 (std::string): Text as string
-		Line( uint16_t, std::string );
-
-		// Parameters:
-		// 1 (uint16_t): Delay
-		// 2 (std::stringstream): Text as stream
-		Line( uint16_t, std::stringstream );
+		Line( Delay, std::string );
 
 		~Line();
 	};
 
-	struct ThreadedLine : Line
+	class ThreadedLine : Line
 	{
 	protected:
-		bool _timerRunning;
-		bool _isTyping;
-		bool _paused;
+		bool _timerRunning = false;
+		bool _isTyping = false;
+		bool _paused = false;
 
-		uint64_t* _currentTime;
-		std::thread* _currentTimerThread;
-		std::thread* _currentTypingThread;
+		uint64_t* _currentTime = nullptr;
+		std::thread* _currentTimerThread = nullptr;
+		std::thread* _currentTypingThread = nullptr;
 
 		void BeginTimer( void );
 		void EndTimer( void );
@@ -81,9 +80,9 @@ namespace PAL::TYPER
 		void BeginTyping( void );
 		void EndTyping( void );
 	public:
-		void ( *onBegin )( );
-		void ( *onEnd )( );
-		void ( *onCancel )( );
+		void ( *onBegin )( void ) = nullptr;
+		void ( *onEnd )( void ) = nullptr;
+		void ( *onCancel )( void ) = nullptr;
 
 		const uint64_t GetCurrentTime( void ) const;
 		const bool IsPaused( void ) const;
@@ -100,58 +99,18 @@ namespace PAL::TYPER
 		ThreadedLine( void );
 
 		// Parameters:
-		// 1 (uint16_t): Delay
+		// 1 (Delay): Delay
 		// 2 (char*): Text
 		// 3 (size_t): Length/Size of Text
-		ThreadedLine( uint16_t, char*, size_t );
+		ThreadedLine( Delay, char*, size_t );
 
 		// Parameters:
-		// 1 (uint16_t): Delay
+		// 1 (Delay): Delay
 		// 2 (std::string): Text as string
-		ThreadedLine( uint16_t, std::string );
-
-		// Parameters:
-		// 1 (uint16_t): Delay
-		// 2 (std::stringstream): Text as stream
-		ThreadedLine( uint16_t, std::stringstream );
+		ThreadedLine( Delay, std::string );
 
 		~ThreadedLine();
 	};
-
-	struct SkippableLine : ThreadedLine
-	{
-	protected:
-		bool _skippable;
-	public:
-		const bool GetSkippable( void ) const;
-
-		void TypeLine( void );
-		void SkipLine( void );
-
-		SkippableLine( void );
-
-		// Parameters:
-		// 1 (uint16_t): Delay
-		// 2 (char*): Text
-		// 3 (size_t): Length/Size of Text
-		SkippableLine( uint16_t, char*, size_t );
-
-		// Parameters:
-		// 1 (uint16_t): Delay
-		// 2 (std::string): Text as string
-		SkippableLine( uint16_t, std::string );
-
-		// Parameters:
-		// 1 (uint16_t): Delay
-		// 2 (std::stringstream): Text as stream
-		SkippableLine( uint16_t, std::stringstream );
-	};
-
-	void TypeLine( Line& );
-
-	template <size_t SIZE>
-	void TypeLines( Line[SIZE] );
-	void TypeLines( std::initializer_list<Line> );
 }
 
 #endif
