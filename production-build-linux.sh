@@ -2,7 +2,6 @@
 
 echo "BUILDING PTYPER LINUX"
 
-g++ -O3 -shared -fPIC -o "builds/PTyper-Linux.dll" "src/ptyper-linux.cpp"
-g++ -g "src/driver.cpp" -o "builds/driver" "builds/PTyper-Linux.dll"
+g++ -O3 -shared -fPIC -o "builds/release/PTyper-Linux.dll" "src/ptyper-linux.cpp"
 
 echo "FINISHED BUILDING PTYPER LINUX"
