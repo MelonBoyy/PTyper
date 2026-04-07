@@ -98,20 +98,77 @@ namespace PAL::TYPER
 
 	Line::Line( uint16_t baseDelay, std::stringstream textStream ) : Line( baseDelay, textStream.str() ) {}
 
+	Line::~Line()
+	{
+		if ( _text != nullptr ) delete _text;
+	}
+
 	void ThreadedLine::BeginTimer( void )
 	{
+		if ( _timerRunning ) return;
+		_timerRunning = true;
+
+		_currentTime = new uint64_t{ 0 };
+		_currentTimerThread = new std::thread( [this]
+			{
+				while ( _timerRunning )
+				{
+					if ( IsPaused() ) continue;
+
+					( *_currentTime )++;
+					SleepMilliseconds( 1 );
+				}
+			} );
 	}
 
 	void ThreadedLine::EndTimer( void )
 	{
+		if ( !_timerRunning ) return;
+		_timerRunning = false;
+
+		if ( _currentTimerThread->joinable() ) _currentTimerThread->join();
+
+		delete _currentTime;
+		delete _currentTimerThread;
 	}
 
 	void ThreadedLine::BeginTyping( void )
 	{
+		if ( IsTyping() ) return;
+		_isTyping = true;
+
+		BeginTimer();
+		Play();
+
+		_currentTypingThread = new std::thread( [this]
+			{
+				uint64_t _nextTime = 0;
+				size_t i = 0;
+				while ( i < _length && IsTyping() )
+				{
+					if ( IsPaused() ) continue;
+					if ( GetCurrentTime() < _nextTime ) continue;
+
+					PrintChar( i );
+					_nextTime += GetDelay( GetText()[i] );
+					i++;
+				}
+			} );
+
+		if ( onBegin != nullptr ) onBegin();
 	}
 
 	void ThreadedLine::EndTyping( void )
 	{
+		if ( !IsTyping() ) return;
+		_isTyping = false;
+
+		EndTimer();
+		if ( _currentTypingThread->joinable() ) _currentTypingThread->join();
+
+		delete _currentTypingThread;
+
+		if ( onEnd != nullptr ) onEnd();
 	}
 
 	const uint64_t ThreadedLine::GetCurrentTime( void ) const
@@ -119,39 +176,56 @@ namespace PAL::TYPER
 		return *_currentTime;
 	}
 
+	const bool ThreadedLine::IsPaused( void ) const
+	{
+		return _paused;
+	}
+
 	const bool ThreadedLine::IsTyping( void ) const
 	{
 		return _isTyping;
 	}
 
-	void ThreadedLine::PauseTyping( void )
+	void ThreadedLine::Pause( void )
 	{
+		if ( IsPaused() ) return;
+		_paused = true;
 	}
 
-	void ThreadedLine::PlayTyping( void )
+	void ThreadedLine::Play( void )
 	{
+		if ( !IsPaused() ) return;
+		_paused = false;
 	}
 
 	void ThreadedLine::InitiateTyping( void )
 	{
+		if ( IsTyping() ) return;
+		BeginTyping();
 	}
 
 	void ThreadedLine::CancelTyping( void )
 	{
+		if ( !IsTyping() ) return;
+		EndTyping();
+
+		if ( onCancel != nullptr ) onCancel();
 	}
 
 	void ThreadedLine::Join( void )
 	{
-	}
+		if ( !IsTyping() ) return;
 
-	void ThreadedLine::Detatch( void )
-	{
+		if ( _currentTypingThread == nullptr ) return;
+		if ( _currentTypingThread->joinable() ) _currentTypingThread->join();
+
+		EndTyping();
 	}
 
 	ThreadedLine::ThreadedLine( void ) : Line()
 	{
 		_currentTime = 0;
-		_currentThread = nullptr;
+		_currentTimerThread = nullptr;
 	}
 
 	ThreadedLine::ThreadedLine( uint16_t baseDelay, char* text, size_t size ) : Line( baseDelay, text, size ) {}
@@ -159,6 +233,11 @@ namespace PAL::TYPER
 	ThreadedLine::ThreadedLine( uint16_t baseDelay, std::string text ) : Line( baseDelay, text ) {}
 
 	ThreadedLine::ThreadedLine( uint16_t baseDelay, std::stringstream textStream ) : Line( baseDelay, textStream.str() ) {}
+
+	ThreadedLine::~ThreadedLine()
+	{
+		Join();
+	}
 }
 
 #endif

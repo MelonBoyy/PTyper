@@ -60,6 +60,8 @@ namespace PAL::TYPER
 		// 1 (uint16_t): Delay
 		// 2 (std::stringstream): Text as stream
 		Line( uint16_t, std::stringstream );
+
+		~Line();
 	};
 
 	struct ThreadedLine : Line
@@ -67,8 +69,11 @@ namespace PAL::TYPER
 	protected:
 		bool _timerRunning;
 		bool _isTyping;
+		bool _paused;
+
 		uint64_t* _currentTime;
-		std::thread* _currentThread;
+		std::thread* _currentTimerThread;
+		std::thread* _currentTypingThread;
 
 		void BeginTimer( void );
 		void EndTimer( void );
@@ -81,16 +86,16 @@ namespace PAL::TYPER
 		void ( *onCancel )( );
 
 		const uint64_t GetCurrentTime( void ) const;
+		const bool IsPaused( void ) const;
 		const bool IsTyping( void ) const;
 
-		void PauseTyping( void );
-		void PlayTyping( void );
+		void Pause( void );
+		void Play( void );
 
 		void InitiateTyping( void );
 		void CancelTyping( void );
 
 		void Join( void );
-		void Detatch( void );
 
 		ThreadedLine( void );
 
