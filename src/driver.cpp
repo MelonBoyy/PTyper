@@ -1,4 +1,5 @@
 #include "ptyper.h"
+#include "ptyper-threaded.h"
 #include <thread>
 #include <chrono>
 
